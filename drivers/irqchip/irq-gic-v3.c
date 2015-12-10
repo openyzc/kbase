@@ -1233,6 +1233,7 @@ gic_acpi_init(struct acpi_subtable_header *header, const unsigned long end)
 {
 	struct acpi_madt_generic_distributor *dist;
 	struct fwnode_handle *domain_handle;
+	u64 stride =0;
 	size_t size;
 	int i, err;
 
@@ -1269,8 +1270,16 @@ gic_acpi_init(struct acpi_subtable_header *header, const unsigned long end)
 		goto out_redist_unmap;
 	}
 
+	/*
+	 * workround for D02, as it reserved as 0 on other platform,
+	 * should not hurt anyone else.
+	 */
+	if (dist->reserved2[0] == 'D' && dist->reserved2[1] == '0'
+	    && dist->reserved2[2] == '2')
+		stride = 0x30000;
+
 	err = gic_init_bases(acpi_data.dist_base, acpi_data.redist_regs,
-			     acpi_data.nr_redist_regions, 0, domain_handle);
+			     acpi_data.nr_redist_regions, stride, domain_handle);
 	if (err)
 		goto out_fwhandle_free;
 
