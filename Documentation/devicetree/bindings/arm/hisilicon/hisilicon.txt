@@ -188,6 +188,13 @@ Example:
 	};
 
 -----------------------------------------------------------------------
+Hisilicon djtag r/w controller
+
+ Required Properties:
+- compatible     : Should include "hisilicon,hip05-djtag"
+- syscon         : implement r/w interfaces via which sysctrl node.
+
+-----------------------------------------------------------------------
 Hisilicon CPU controller
 
 Required properties:
