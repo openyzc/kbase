@@ -28,7 +28,6 @@
 #include <acpi/processor.h>
 #include <asm/numa.h>
 
-int acpi_numa __initdata;
 static int cpus_in_srat;
 
 struct __node_cpu_hwid {
@@ -38,17 +37,6 @@ struct __node_cpu_hwid {
 
 static struct __node_cpu_hwid early_node_cpu_hwid[NR_CPUS] = {
 [0 ... NR_CPUS - 1] = {NUMA_NO_NODE, PHYS_CPUID_INVALID} };
-
-static __init void bad_srat(void)
-{
-	pr_err("SRAT not used.\n");
-	acpi_numa = -1;
-}
-
-static __init inline int srat_disabled(void)
-{
-	return acpi_numa < 0;
-}
 
 void __init acpi_numa_set_node_info(unsigned int cpu, u64 hwid)
 {

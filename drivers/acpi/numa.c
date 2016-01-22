@@ -40,6 +40,7 @@ static int node_to_pxm_map[MAX_NUMNODES]
 			= { [0 ... MAX_NUMNODES - 1] = PXM_INVAL };
 
 unsigned char acpi_srat_revision __initdata;
+int acpi_numa __initdata;
 
 int pxm_to_node(int pxm)
 {
