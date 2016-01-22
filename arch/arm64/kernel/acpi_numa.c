@@ -184,7 +184,7 @@ int __init acpi_numa_memory_affinity_init(struct acpi_srat_mem_affinity *ma)
 		node, pxm,
 		(unsigned long long) start, (unsigned long long) end - 1);
 
-	if (numa_add_memblk(node, start, (end - start)) < 0) {
+	if (numa_add_memblk(node, start, end) < 0) {
 		bad_srat();
 		return -EINVAL;
 	}
