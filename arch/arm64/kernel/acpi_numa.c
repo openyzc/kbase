@@ -132,7 +132,6 @@ void __init acpi_numa_gicc_affinity_init(struct acpi_srat_gicc_affinity *pa)
 	early_node_cpu_hwid[cpus_in_srat].node_id = node;
 	early_node_cpu_hwid[cpus_in_srat].cpu_hwid =  mpidr;
 	node_set(node, numa_nodes_parsed);
-	acpi_numa = 1;
 	cpus_in_srat++;
 	pr_info("SRAT: PXM %d -> MPIDR 0x%Lx -> Node %d cpu %d\n",
 		pxm, mpidr, node, cpus_in_srat);
