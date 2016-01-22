@@ -137,48 +137,6 @@ void __init acpi_numa_gicc_affinity_init(struct acpi_srat_gicc_affinity *pa)
 		pxm, mpidr, node, cpus_in_srat);
 }
 
-/* Callback for parsing of the Proximity Domain <-> Memory Area mappings */
-int __init acpi_numa_memory_affinity_init(struct acpi_srat_mem_affinity *ma)
-{
-	u64 start, end;
-	int node, pxm;
-
-	if (srat_disabled())
-		return -EINVAL;
-
-	if (ma->header.length != sizeof(struct acpi_srat_mem_affinity)) {
-		bad_srat();
-		return -EINVAL;
-	}
-
-	/* Ignore disabled entries */
-	if (!(ma->flags & ACPI_SRAT_MEM_ENABLED))
-		return -EINVAL;
-
-	start = ma->base_address;
-	end = start + ma->length;
-	pxm = ma->proximity_domain;
-
-	node = acpi_map_pxm_to_node(pxm);
-
-	if (node == NUMA_NO_NODE || node >= MAX_NUMNODES) {
-		pr_err("SRAT: Too many proximity domains.\n");
-		bad_srat();
-		return -EINVAL;
-	}
-
-	pr_info("SRAT: Node %u PXM %u [mem %#010Lx-%#010Lx]\n",
-		node, pxm,
-		(unsigned long long) start, (unsigned long long) end - 1);
-
-	if (numa_add_memblk(node, start, end) < 0) {
-		bad_srat();
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 int __init arm64_acpi_numa_init(void)
 {
 	int ret;
