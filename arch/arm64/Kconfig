@@ -238,6 +238,10 @@ config PCI_SYSCALL
 
 source "drivers/pci/Kconfig"
 
+config PCI_MMCONFIG
+	def_bool y
+	depends on ACPI
+
 endmenu
 
 menu "Kernel Features"
