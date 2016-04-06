@@ -7,6 +7,7 @@
  * (at your option) any later version.
  */
 
+#include <linux/acpi.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
@@ -649,6 +650,7 @@ static int hns_mac_get_info(struct hns_mac_cb *mac_cb,
 	int ret;
 	struct regmap *syscon;
 	struct device_node *phy_np;
+	struct device *dev = mac_cb->dev;
 
 	mac_cb->link = false;
 	mac_cb->half_duplex = false;
@@ -670,6 +672,9 @@ static int hns_mac_get_info(struct hns_mac_cb *mac_cb,
 	 * parse the old dts to get phy-handle from dsaf node
 	 */
 	if (!mac_cb->fw_port) {
+		if (!is_of_node(dev->fwnode))
+			return -ENXIO;
+
 		/* Get the rest of the PHY information */
 		phy_np = of_parse_phandle(np, "phy-handle", mac_cb->mac_id);
 		mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
@@ -681,38 +686,39 @@ static int hns_mac_get_info(struct hns_mac_cb *mac_cb,
 		return 0;
 	}
 
-	if (!is_of_node(mac_cb->fw_port))
-		return -EINVAL;
+	if (is_of_node(mac_cb->fw_port)) {
+		/* parse property from port subnode in dsaf */
+		phy_np = of_parse_phandle(to_of_node(mac_cb->fw_port),
+					  "phy-handle", 0);
+		mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
+		if (mac_cb->phy_fwnode)
+			dev_dbg(mac_cb->dev, "mac%d gets a phy node\n",
+				mac_cb->mac_id);
 
-	/* parse property from port subnode in dsaf */
-	phy_np = of_parse_phandle(to_of_node(mac_cb->fw_port), "phy-handle", 0);
-	mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
-	if (mac_cb->phy_fwnode)
-		dev_dbg(mac_cb->dev, "mac%d gets a phy node\n", mac_cb->mac_id);
+		syscon = syscon_node_to_regmap(
+				of_parse_phandle(to_of_node(mac_cb->fw_port),
+						 "serdes-syscon", 0));
+		if (IS_ERR_OR_NULL(syscon)) {
+			dev_err(mac_cb->dev, "serdes-syscon is needed!\n");
+			return -EINVAL;
+		}
+		mac_cb->serdes_ctrl = syscon;
 
-	syscon = syscon_node_to_regmap(
-			of_parse_phandle(to_of_node(mac_cb->fw_port),
-					 "serdes-syscon", 0));
-	if (IS_ERR_OR_NULL(syscon)) {
-		dev_err(mac_cb->dev, "serdes-syscon is needed!\n");
-		return -EINVAL;
-	}
-	mac_cb->serdes_ctrl = syscon;
-
-	syscon = syscon_node_to_regmap(
-			of_parse_phandle(to_of_node(mac_cb->fw_port),
-					 "cpld-syscon", 0));
-	if (IS_ERR_OR_NULL(syscon)) {
-		dev_dbg(mac_cb->dev, "no cpld-syscon found!\n");
-		mac_cb->cpld_ctrl = NULL;
-	} else {
-		mac_cb->cpld_ctrl = syscon;
-		ret = fwnode_property_read_u32(mac_cb->fw_port,
-					       "cpld-ctrl-reg",
-					       &mac_cb->cpld_ctrl_reg);
-		if (ret) {
-			dev_err(mac_cb->dev, "get cpld-ctrl-reg fail!\n");
-			return ret;
+		syscon = syscon_node_to_regmap(
+				of_parse_phandle(to_of_node(mac_cb->fw_port),
+						 "cpld-syscon", 0));
+		if (IS_ERR_OR_NULL(syscon)) {
+			dev_dbg(mac_cb->dev, "no cpld-syscon found!\n");
+			mac_cb->cpld_ctrl = NULL;
+		} else {
+			mac_cb->cpld_ctrl = syscon;
+			ret = fwnode_property_read_u32(mac_cb->fw_port,
+						       "cpld-ctrl-reg",
+						       &mac_cb->cpld_ctrl_reg);
+			if (ret) {
+				dev_err(mac_cb->dev, "get cpld-ctrl-reg fail!\n");
+				return ret;
+			}
 		}
 	}
 	return 0;
