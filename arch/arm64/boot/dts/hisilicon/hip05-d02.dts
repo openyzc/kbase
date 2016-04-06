@@ -52,3 +52,19 @@
 &peri_gpio0 {
 	status = "ok";
 };
+
+&eth0 {
+	status = "okay";
+};
+
+&eth1 {
+	status = "okay";
+};
+
+&eth2 {
+	status = "okay";
+};
+
+&eth3 {
+	status = "okay";
+};

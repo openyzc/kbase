@@ -342,6 +342,23 @@
 			reg = < 0x0 0x80000000 0x0 0x10000>;
 		};
 
+		dsaf_subctrl: dsaf_subctrl@c0000000 {
+			compatible = "hisilicon,dsaf-ctrl", "syscon";
+			reg = <0x0 0xc0000000 0x0 0x10000>;
+		};
+
+
+		serdes_ctrl0: sds_ctrl0@c2200000 {
+			compatible = "hisilicon,serdes-syscon","syscon";
+			reg = <0 0xc2200000 0x0 0x80000>;
+		};
+
+		serdes_ctrl1: sds_ctrl0@c2280000 {
+			compatible = "hisilicon,serdes-syscon","syscon";
+			reg = <0 0xc2280000 0x0 0x80000>;
+		};
+
+
 		uart0: uart@80300000 {
 			compatible = "snps,dw-apb-uart";
 			reg = <0x0 0x80300000 0x0 0x10000>;
@@ -402,4 +419,6 @@
 			};
 		};
 	};
+
+	/include/ "hip05_hnsv2.dtsi"
 };
