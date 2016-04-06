@@ -1874,6 +1874,7 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 	struct hns_nic_priv *priv;
 	struct device_node *node = dev->of_node;
 	int ret;
+	u32 port_id;
 
 	ndev = alloc_etherdev_mq(sizeof(struct hns_nic_priv), NIC_MAX_Q_PER_VF);
 	if (!ndev)
@@ -1897,9 +1898,17 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 		goto out_read_prop_fail;
 	}
 
-	ret = of_property_read_u32(node, "port-id", &priv->port_id);
-	if (ret)
-		goto out_read_prop_fail;
+	ret = of_property_read_u32(node, "port-idx-in-ae", &port_id);
+	if (ret) {
+		/* identity whether it's an old dts with port-id */
+		ret = of_property_read_u32(node, "port-id", &port_id);
+		if (ret)
+			goto out_read_prop_fail;
+		/* for old dts, we caculate the port offset */
+		port_id = port_id < 2 ? port_id + HNS_DEBUG_OFFSET :
+			port_id - HNS_SRV_OFFSET;
+	}
+	priv->port_id = port_id;
 
 	hns_init_mac_addr(ndev);
 
