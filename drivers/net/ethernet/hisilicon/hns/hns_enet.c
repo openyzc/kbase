@@ -998,14 +998,15 @@ int hns_nic_init_phy(struct net_device *ndev, struct hnae_handle *h)
 	struct hns_nic_priv *priv = netdev_priv(ndev);
 	struct phy_device *phy_dev = NULL;
 
-	if (!h->phy_node)
+	if (!h->phy_fwnode)
 		return 0;
 
 	if (h->phy_if != PHY_INTERFACE_MODE_XGMII)
-		phy_dev = of_phy_connect(ndev, h->phy_node,
+		phy_dev = of_phy_connect(ndev, to_of_node(h->phy_fwnode),
 					 hns_nic_adjust_link, 0, h->phy_if);
 	else
-		phy_dev = of_phy_attach(ndev, h->phy_node, 0, h->phy_if);
+		phy_dev = of_phy_attach(ndev, to_of_node(h->phy_fwnode), 0,
+					h->phy_if);
 
 	if (unlikely(!phy_dev) || IS_ERR(phy_dev))
 		return !phy_dev ? -ENODEV : PTR_ERR(phy_dev);
@@ -1812,7 +1813,7 @@ static int hns_nic_try_get_ae(struct net_device *ndev)
 	int ret;
 
 	h = hnae_get_handle(&priv->netdev->dev,
-			    priv->ae_node, priv->port_id, NULL);
+			    priv->fwnode, priv->port_id, NULL);
 	if (IS_ERR_OR_NULL(h)) {
 		ret = -ENODEV;
 		dev_dbg(priv->dev, "has not handle, register notifier!\n");
@@ -1872,9 +1873,9 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct net_device *ndev;
 	struct hns_nic_priv *priv;
-	struct device_node *node = dev->of_node;
 	int ret;
 	u32 port_id;
+	struct device_node *ae_node;
 
 	ndev = alloc_etherdev_mq(sizeof(struct hns_nic_priv), NIC_MAX_Q_PER_VF);
 	if (!ndev)
@@ -1886,17 +1887,18 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 	priv->dev = dev;
 	priv->netdev = ndev;
 
-	if (of_device_is_compatible(node, "hisilicon,hns-nic-v1"))
+	if (of_device_is_compatible(dev->of_node, "hisilicon,hns-nic-v1"))
 		priv->enet_ver = AE_VERSION_1;
 	else
 		priv->enet_ver = AE_VERSION_2;
 
-	priv->ae_node = (void *)of_parse_phandle(node, "ae-handle", 0);
-	if (IS_ERR_OR_NULL(priv->ae_node)) {
-		ret = PTR_ERR(priv->ae_node);
+	ae_node = of_parse_phandle(dev->of_node, "ae-handle", 0);
+	if (IS_ERR_OR_NULL(ae_node)) {
+		ret = PTR_ERR(ae_node);
 		dev_err(dev, "not find ae-handle\n");
 		goto out_read_prop_fail;
 	}
+		priv->fwnode = &ae_node->fwnode;
 
 	ret = device_property_read_u32(dev, "port-idx-in-ae", &port_id);
 	if (ret) {

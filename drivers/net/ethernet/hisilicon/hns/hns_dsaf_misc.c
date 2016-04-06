@@ -348,7 +348,7 @@ int hns_mac_config_sds_loopback(struct hns_mac_cb *mac_cb, u8 en)
 	int sfp_prsnt;
 	int ret = hns_mac_get_sfp_prsnt(mac_cb, &sfp_prsnt);
 
-	if (!mac_cb->phy_node) {
+		if (!mac_cb->phy_fwnode) {
 		if (ret)
 			pr_info("please confirm sfp is present or not\n");
 		else
@@ -364,7 +364,6 @@ int hns_mac_config_sds_loopback(struct hns_mac_cb *mac_cb, u8 en)
 	} else {
 		dsaf_set_reg_field(base_addr, reg_offset, 1ull << 10, 10, !!en);
 	}
-
 
 	return 0;
 }
