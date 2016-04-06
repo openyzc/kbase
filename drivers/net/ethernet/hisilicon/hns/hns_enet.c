@@ -1898,10 +1898,10 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 		goto out_read_prop_fail;
 	}
 
-	ret = of_property_read_u32(node, "port-idx-in-ae", &port_id);
+	ret = device_property_read_u32(dev, "port-idx-in-ae", &port_id);
 	if (ret) {
 		/* identity whether it's an old dts with port-id */
-		ret = of_property_read_u32(node, "port-id", &port_id);
+		ret = device_property_read_u32(dev, "port-id", &port_id);
 		if (ret)
 			goto out_read_prop_fail;
 		/* for old dts, we caculate the port offset */
