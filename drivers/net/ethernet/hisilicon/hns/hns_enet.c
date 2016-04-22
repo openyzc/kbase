@@ -132,6 +132,13 @@ static void fill_v2_desc(struct hnae_ring *ring, void *priv,
 	ring_ptr_move_fw(ring, next_to_use);
 }
 
+static const struct acpi_device_id hns_enet_acpi_match[] = {
+	{ "HISI00C1", 0 },
+	{ "HISI00C2", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, hns_enet_acpi_match);
+
 static void fill_desc(struct hnae_ring *ring, void *priv,
 		      int size, dma_addr_t dma, int frag_end,
 		      int buf_num, enum hns_desc_type type, int mtu)
@@ -225,6 +232,80 @@ static int hns_nic_maybe_stop_tx(
 
 	*bnum = buf_num;
 	return 0;
+}
+
+static int hns_nic_phy_match(struct device *dev, void *phy_fwnode)
+{
+	if (IS_ENABLED(CONFIG_OF) && dev->of_node)
+		return &dev->of_node->fwnode == phy_fwnode;
+	else if (ACPI_COMPANION(dev))
+		return dev->fwnode == phy_fwnode;
+	else
+		return 0;
+}
+
+/**
+ * hns_nic_phy_find_device - Give a PHY node, find the phy_device
+ * @phy_fwnode: Pointer to the phy's framework node
+ *
+ * If successful, returns a pointer to the phy_device with the embedded
+ * struct device refcount incremented by one, or NULL on failure.
+ */
+static
+struct phy_device *hns_nic_phy_find_device(struct fwnode_handle *phy_fwnode)
+{
+	struct device *d;
+
+	if (!phy_fwnode)
+		return NULL;
+
+	d = bus_find_device(&mdio_bus_type, NULL,
+			    phy_fwnode, hns_nic_phy_match);
+
+	return d ? to_phy_device(d) : NULL;
+}
+
+static
+struct phy_device *hns_nic_phy_attach(struct net_device *dev,
+				      struct fwnode_handle *phy_fwnode,
+				      u32 flags,
+				      phy_interface_t iface)
+{
+	struct phy_device *phy = hns_nic_phy_find_device(phy_fwnode);
+	int ret;
+
+	if (!phy)
+		return NULL;
+
+	ret = phy_attach_direct(dev, phy, flags, iface);
+
+	/* refcount is held by phy_attach_direct() on success */
+	put_device(&phy->mdio.dev);
+
+	return ret ? NULL : phy;
+}
+
+static
+struct phy_device *hns_nic_phy_connect(struct net_device *dev,
+				       struct fwnode_handle *phy_fwnode,
+				       void (*hndlr)(struct net_device *),
+				       u32 flags,
+				       phy_interface_t iface)
+{
+	struct phy_device *phy = hns_nic_phy_find_device(phy_fwnode);
+	int ret;
+
+	if (!phy)
+		return NULL;
+
+	phy->dev_flags = flags;
+
+	ret = phy_connect_direct(dev, phy, hndlr, iface);
+
+	/* refcount is held by phy_connect_direct() on success */
+	put_device(&phy->mdio.dev);
+
+	return ret ? NULL : phy;
 }
 
 static int hns_nic_maybe_stop_tso(
@@ -913,10 +994,7 @@ static int hns_nic_tx_poll_one(struct hns_nic_ring_data *ring_data,
 static void hns_nic_tx_fini_pro(struct hns_nic_ring_data *ring_data)
 {
 	struct hnae_ring *ring = ring_data->ring;
-	int head = ring->next_to_clean;
-
-	/* for hardware bug fixed */
-	head = readl_relaxed(ring->io_base + RCB_REG_HEAD);
+	int head = readl_relaxed(ring->io_base + RCB_REG_HEAD);
 
 	if (head != ring->next_to_clean) {
 		ring_data->ring->q->handle->dev->ops->toggle_ring_irq(
@@ -959,8 +1037,8 @@ static int hns_nic_common_poll(struct napi_struct *napi, int budget)
 		napi_complete(napi);
 		ring_data->ring->q->handle->dev->ops->toggle_ring_irq(
 			ring_data->ring, 0);
-
-		ring_data->fini_process(ring_data);
+		if (ring_data->fini_process)
+			ring_data->fini_process(ring_data);
 		return 0;
 	}
 
@@ -1001,14 +1079,16 @@ int hns_nic_init_phy(struct net_device *ndev, struct hnae_handle *h)
 	struct hns_nic_priv *priv = netdev_priv(ndev);
 	struct phy_device *phy_dev = NULL;
 
-	if (!h->phy_node)
+	if (!h->phy_fwnode)
 		return 0;
 
 	if (h->phy_if != PHY_INTERFACE_MODE_XGMII)
-		phy_dev = of_phy_connect(ndev, h->phy_node,
-					 hns_nic_adjust_link, 0, h->phy_if);
+		phy_dev = hns_nic_phy_connect(ndev, h->phy_fwnode,
+					      hns_nic_adjust_link,
+					      0, h->phy_if);
 	else
-		phy_dev = of_phy_attach(ndev, h->phy_node, 0, h->phy_if);
+		phy_dev = hns_nic_phy_attach(ndev, h->phy_fwnode,
+					     0, h->phy_if);
 
 	if (unlikely(!phy_dev) || IS_ERR(phy_dev))
 		return !phy_dev ? -ENODEV : PTR_ERR(phy_dev);
@@ -1070,13 +1150,8 @@ void hns_nic_update_stats(struct net_device *netdev)
 static void hns_init_mac_addr(struct net_device *ndev)
 {
 	struct hns_nic_priv *priv = netdev_priv(ndev);
-	struct device_node *node = priv->dev->of_node;
-	const void *mac_addr_temp;
 
-	mac_addr_temp = of_get_mac_address(node);
-	if (mac_addr_temp && is_valid_ether_addr(mac_addr_temp)) {
-		memcpy(ndev->dev_addr, mac_addr_temp, ndev->addr_len);
-	} else {
+	if (!device_get_mac_address(priv->dev, ndev->dev_addr, ETH_ALEN)) {
 		eth_hw_addr_random(ndev);
 		dev_warn(priv->dev, "No valid mac, use random mac %pM",
 			 ndev->dev_addr);
@@ -1723,6 +1798,7 @@ static int hns_nic_init_ring_data(struct hns_nic_priv *priv)
 {
 	struct hnae_handle *h = priv->ae_handle;
 	struct hns_nic_ring_data *rd;
+	bool is_ver1 = AE_IS_VER1(priv->enet_ver);
 	int i;
 
 	if (h->q_num > NIC_MAX_Q_PER_VF) {
@@ -1740,7 +1816,7 @@ static int hns_nic_init_ring_data(struct hns_nic_priv *priv)
 		rd->queue_index = i;
 		rd->ring = &h->qs[i]->tx_ring;
 		rd->poll_one = hns_nic_tx_poll_one;
-		rd->fini_process = hns_nic_tx_fini_pro;
+		rd->fini_process = is_ver1 ? hns_nic_tx_fini_pro : NULL;
 
 		netif_napi_add(priv->netdev, &rd->napi,
 			       hns_nic_common_poll, NIC_TX_CLEAN_MAX_NUM);
@@ -1752,7 +1828,7 @@ static int hns_nic_init_ring_data(struct hns_nic_priv *priv)
 		rd->ring = &h->qs[i - h->q_num]->rx_ring;
 		rd->poll_one = hns_nic_rx_poll_one;
 		rd->ex_process = hns_nic_rx_up_pro;
-		rd->fini_process = hns_nic_rx_fini_pro;
+		rd->fini_process = is_ver1 ? hns_nic_rx_fini_pro : NULL;
 
 		netif_napi_add(priv->netdev, &rd->napi,
 			       hns_nic_common_poll, NIC_RX_CLEAN_MAX_NUM);
@@ -1814,9 +1890,9 @@ static int hns_nic_try_get_ae(struct net_device *ndev)
 	int ret;
 
 	h = hnae_get_handle(&priv->netdev->dev,
-			    priv->ae_node, priv->port_id, NULL);
+			    priv->fwnode, priv->port_id, NULL);
 	if (IS_ERR_OR_NULL(h)) {
-		ret = PTR_ERR(h);
+		ret = -ENODEV;
 		dev_dbg(priv->dev, "has not handle, register notifier!\n");
 		goto out;
 	}
@@ -1874,8 +1950,8 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct net_device *ndev;
 	struct hns_nic_priv *priv;
-	struct device_node *node = dev->of_node;
 	int ret;
+	u32 port_id;
 
 	ndev = alloc_etherdev_mq(sizeof(struct hns_nic_priv), NIC_MAX_Q_PER_VF);
 	if (!ndev)
@@ -1887,21 +1963,53 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 	priv->dev = dev;
 	priv->netdev = ndev;
 
-	if (of_device_is_compatible(node, "hisilicon,hns-nic-v1"))
-		priv->enet_ver = AE_VERSION_1;
-	else
-		priv->enet_ver = AE_VERSION_2;
+	if (IS_ENABLED(CONFIG_OF) && pdev->dev.of_node) {
+		struct device_node *ae_node;
 
-	priv->ae_node = (void *)of_parse_phandle(node, "ae-handle", 0);
-	if (IS_ERR_OR_NULL(priv->ae_node)) {
-		ret = PTR_ERR(priv->ae_node);
-		dev_err(dev, "not find ae-handle\n");
-		goto out_read_prop_fail;
+		if (of_device_is_compatible(dev->of_node,
+					    "hisilicon,hns-nic-v1"))
+			priv->enet_ver = AE_VERSION_1;
+		else
+			priv->enet_ver = AE_VERSION_2;
+
+		ae_node = of_parse_phandle(dev->of_node, "ae-handle", 0);
+		if (IS_ERR_OR_NULL(ae_node)) {
+			ret = PTR_ERR(ae_node);
+			dev_err(dev, "not find ae-handle\n");
+			goto out_read_prop_fail;
+		}
+		priv->fwnode = &ae_node->fwnode;
+	} else if (ACPI_COMPANION(&pdev->dev)) {
+		struct acpi_device *adev = to_acpi_device_node(dev->fwnode);
+		struct acpi_reference_args args;
+
+		if (!acpi_match_device_ids(adev, &hns_enet_acpi_match[1]))
+			priv->enet_ver = AE_VERSION_2;
+		else
+			priv->enet_ver = AE_VERSION_1;
+
+		ret = acpi_node_get_property_reference(dev->fwnode,
+						       "ae-handle", 0, &args);
+		if (ret) {
+			dev_err(dev, "not find ae-handle\n");
+			goto out_read_prop_fail;
+		}
+		priv->fwnode = acpi_fwnode_handle(args.adev);
+	} else {
+		dev_err(dev, "cannot read cfg data from OF or acpi\n");
+		return -ENXIO;
 	}
-
-	ret = of_property_read_u32(node, "port-id", &priv->port_id);
-	if (ret)
-		goto out_read_prop_fail;
+	ret = device_property_read_u32(dev, "port-idx-in-ae", &port_id);
+	if (ret) {
+		/* identity whether it's an old dts with port-id */
+		ret = device_property_read_u32(dev, "port-id", &port_id);
+		if (ret)
+			goto out_read_prop_fail;
+		/* for old dts, we caculate the port offset */
+		port_id = port_id < 2 ? port_id + HNS_DEBUG_OFFSET :
+			port_id - HNS_SRV_OFFSET;
+	}
+	priv->port_id = port_id;
 
 	hns_init_mac_addr(ndev);
 
@@ -2007,6 +2115,7 @@ static struct platform_driver hns_nic_dev_driver = {
 	.driver = {
 		.name = "hns-nic",
 		.of_match_table = hns_enet_of_match,
+		.acpi_match_table = ACPI_PTR(hns_enet_acpi_match),
 	},
 	.probe = hns_nic_dev_probe,
 	.remove = hns_nic_dev_remove,

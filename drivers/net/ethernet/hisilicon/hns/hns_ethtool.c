@@ -597,7 +597,7 @@ static void hns_nic_self_test(struct net_device *ndev,
 	st_param[1][0] = MAC_INTERNALLOOP_SERDES;
 	st_param[1][1] = 1; /*serdes must exist*/
 	st_param[2][0] = MAC_INTERNALLOOP_PHY; /* only supporte phy node*/
-	st_param[2][1] = ((!!(priv->ae_handle->phy_node)) &&
+	st_param[2][1] = ((!!(priv->ae_handle->phy_fwnode)) &&
 		(priv->ae_handle->phy_if != PHY_INTERFACE_MODE_XGMII));
 
 	if (eth_test->flags == ETH_TEST_FL_OFFLINE) {
@@ -794,8 +794,10 @@ static int hns_set_coalesce(struct net_device *net_dev,
 	    (!ops->set_coalesce_frames))
 		return -ESRCH;
 
-	ops->set_coalesce_usecs(priv->ae_handle,
-					ec->rx_coalesce_usecs);
+	ret = ops->set_coalesce_usecs(priv->ae_handle,
+				      ec->rx_coalesce_usecs);
+	if (ret)
+		return ret;
 
 	ret = ops->set_coalesce_frames(
 		priv->ae_handle,
@@ -1013,8 +1015,8 @@ int hns_phy_led_set(struct net_device *netdev, int value)
 	struct phy_device *phy_dev = priv->phy;
 
 	retval = phy_write(phy_dev, HNS_PHY_PAGE_REG, HNS_PHY_PAGE_LED);
-	retval = phy_write(phy_dev, HNS_LED_FC_REG, value);
-	retval = phy_write(phy_dev, HNS_PHY_PAGE_REG, HNS_PHY_PAGE_COPPER);
+	retval |= phy_write(phy_dev, HNS_LED_FC_REG, value);
+	retval |= phy_write(phy_dev, HNS_PHY_PAGE_REG, HNS_PHY_PAGE_COPPER);
 	if (retval) {
 		netdev_err(netdev, "mdiobus_write fail !\n");
 		return retval;

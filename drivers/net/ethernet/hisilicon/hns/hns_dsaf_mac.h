@@ -10,9 +10,11 @@
 #ifndef _HNS_DSAF_MAC_H
 #define _HNS_DSAF_MAC_H
 
-#include <linux/phy.h>
-#include <linux/kernel.h>
 #include <linux/if_vlan.h>
+#include <linux/kernel.h>
+#include <linux/phy.h>
+#include <linux/regmap.h>
+
 #include "hns_dsaf_main.h"
 
 struct dsaf_device;
@@ -309,11 +311,14 @@ struct mac_hw_stats {
 struct hns_mac_cb {
 	struct device *dev;
 	struct dsaf_device *dsaf_dev;
+	struct fwnode_handle *fw_port;
 	struct mac_priv priv;
 	u8 __iomem *vaddr;
-	u8 __iomem *cpld_vaddr;
 	u8 __iomem *sys_ctl_vaddr;
 	u8 __iomem *serdes_vaddr;
+	struct regmap *cpld_ctrl;
+	struct regmap *serdes_ctrl;
+	u32 cpld_ctrl_reg;
 	struct mac_entry_idx addr_entry_idx[DSAF_MAX_VM_NUM];
 	u8 sfp_prsnt;
 	u8 cpld_led_value;
@@ -332,7 +337,7 @@ struct hns_mac_cb {
 	phy_interface_t phy_if;
 	enum hnae_loop loop_mode;
 
-	struct device_node *phy_node;
+	struct fwnode_handle *phy_fwnode;
 
 	struct mac_hw_stats hw_stats;
 };

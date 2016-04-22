@@ -331,6 +331,12 @@
 		#size-cells = <2>;
 		ranges;
 
+		refclk175mhz: refclk175mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <175000000>;
+		};
+
 		refclk200mhz: refclk200mhz {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
@@ -340,6 +346,26 @@
 		peri_c_subctrl: syscon@80000000 {
 			compatible = "hisilicon,hip05-perisubc", "syscon";
 			reg = < 0x0 0x80000000 0x0 0x10000>;
+		};
+
+		dsaf_subctrl: dsaf_subctrl@c0000000 {
+			compatible = "hisilicon,dsaf-ctrl", "syscon";
+			reg = <0x0 0xc0000000 0x0 0x10000>;
+		};
+
+		pcie_subctl: pcie_subctl@b0000000 {
+			compatible = "hisilicon,pcie-sas-subctrl", "syscon";
+			reg = <0x0 0xb0000000 0x0 0x10000>;
+		};
+
+		serdes_ctrl0: sds_ctrl0@c2200000 {
+			compatible = "hisilicon,serdes-syscon","syscon";
+			reg = <0 0xc2200000 0x0 0x80000>;
+		};
+
+		serdes_ctrl1: sds_ctrl0@c2280000 {
+			compatible = "hisilicon,serdes-syscon","syscon";
+			reg = <0 0xc2280000 0x0 0x80000>;
 		};
 
 		uart0: uart@80300000 {
@@ -362,6 +388,183 @@
 			reg-shift = <2>;
 			reg-io-width = <4>;
 			status = "disabled";
+		};
+
+		m3_i2c0: i2c@a00e0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa00e0000 0x0 0x10000>;
+			interrupts = <8 4>;
+			clocks = <&refclk175mhz>;
+			status = "disabled";
+		};
+
+		m3_i2c1: i2c@a00f0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa00f0000 0x0 0x10000>;
+			interrupts = <9 4>;
+			clocks = <&refclk175mhz>;
+			status = "disabled";
+		};
+
+		m3_i2c2: i2c@a0100000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa0100000 0x0 0x10000>;
+			interrupts = <10 4>;
+			clocks = <&refclk175mhz>;
+			status = "disabled";
+		};
+
+		usb0: ehci@a1000000 {
+			compatible = "generic-ehci";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa1000000 0x0 0x10000>;
+			interrupts = <20 4>;
+			dma-coherent;
+			status = "disabled";
+		};
+
+		usb1: ohci@a1010000 {
+			compatible = "generic-ohci";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa1010000 0x0 0x10000>;
+			interrupts = <19 4>;
+			dma-coherent;
+			status = "disabled";
+		};
+
+		ahci0: sata@b1002800 {
+			compatible = "hisilicon,hip05-ahci";
+			interrupt-parent = <&mbigen_pcie>;
+			reg = <0x0 0xb1002800 0x0 0x10000>,
+			      <0x0 0xb1000000 0x0 0x10000>;
+			interrupts = <382 4>;
+			dma-coherent;
+			status = "disabled";
+		};
+
+		sas0: sas@c1000000 {
+			compatible = "hisilicon,hip05-sas-v1";
+			sas-addr = [50 01 88 20 16 00 00 0a];
+			reg = <0x0 0xc1000000 0x0 0x10000>;
+			hisilicon,sas-syscon = <&dsaf_subctrl>;
+			ctrl-reset-reg = <0xa60>;
+			ctrl-reset-sts-reg = <0x5a30>;
+			ctrl-clock-ena-reg = <0x338>;
+			queue-count = <32>;
+			phy-count = <8>;
+			dma-coherent;
+			interrupt-parent = <&mbigen_dsa>;
+			interrupts = <259 4>, <263 4>,<264 4>,/* phy irq(0~79) */
+					<269 4>,<273 4>,<274 4>,/* phy irq(0~79) */
+					<279 4>,<283 4>,<284 4>,/* phy irq(0~79) */
+					<289 4>,<293 4>,<294 4>,/* phy irq(0~79) */
+					<299 4>,<303 4>,<304 4>,/* phy irq(0~79) */
+					<309 4>,<313 4>,<314 4>,/* phy irq(0~79) */
+					<319 4>,<323 4>,<324 4>,/* phy irq(0~79) */
+					<329 4>,<333 4>,<334 4>,/* phy irq(0~79) */
+					<336 1>,<337 1>,<338 1>,<339 1>,<340 1>,
+					<341 1>,<342 1>,<343 1>,/* cq irq (80~111) */
+					<344 1>,<345 1>,<346 1>,<347 1>,<348 1>,
+					<349 1>,<350 1>,<351 1>,/* cq irq (80~111) */
+					<352 1>,<353 1>,<354 1>,<355 1>,<356 1>,
+					<357 1>,<358 1>,<359 1>,/* cq irq (80~111) */
+					<360 1>,<361 1>,<362 1>,<363 1>,<364 1>,
+					<365 1>,<366 1>,<367 1>,/* cq irq (80~111) */
+					<376 4>,/* chip fatal error irq(120) */
+					<381 4>;/* chip fatal error irq(125) */
+			status = "disabled";
+		};
+
+		sas1: sas@b1000000 {
+			compatible = "hisilicon,hip05-sas-v1";
+			sas-addr = [50 01 88 20 16 00 00 00];
+			reg = <0x0 0xb1000000 0x0 0x10000>;
+			hisilicon,sas-syscon = <&pcie_subctl>;
+			ctrl-reset-reg = <0xa18>;
+			ctrl-reset-sts-reg = <0x5a0c>;
+			ctrl-clock-ena-reg = <0x318>;
+			queue-count = <32>;
+			phy-count = <8>;
+			dma-coherent;
+			interrupt-parent = <&mbigen_pcie>;
+			interrupts = <259 4>,<263 4>,<264 4>,/* phy irq(0~79) */
+					<269 4>,<273 4>,<274 4>,/* phy irq(0~79) */
+					<279 4>,<283 4>,<284 4>,/* phy irq(0~79) */
+					<289 4>,<293 4>,<294 4>,/* phy irq(0~79) */
+					<299 4>,<303 4>,<304 4>,/* phy irq(0~79) */
+					<309 4>,<313 4>,<314 4>,/* phy irq(0~79) */
+					<319 4>,<323 4>,<324 4>,/* phy irq(0~79) */
+					<329 4>,<333 4>,<334 4>,/* phy irq(0~79) */
+					<336 1>,<337 1>,<338 1>,<339 1>,<340 1>,
+					<341 1>,<342 1>,<343 1>,/* cq irq (80~111) */
+					<344 1>,<345 1>,<346 1>,<347 1>,<348 1>,
+					<349 1>,<350 1>,<351 1>,/* cq irq (80~111) */
+					<352 1>,<353 1>,<354 1>,<355 1>,<356 1>,
+					<357 1>,<358 1>,<359 1>,/* cq irq (80~111) */
+					<360 1>,<361 1>,<362 1>,<363 1>,<364 1>,
+					<365 1>,<366 1>,<367 1>,/* cq irq (80~111) */
+					<376 4>,/* chip fatal error irq(120) */
+					<381 4>;/* chip fatal error irq(125) */
+			status = "disabled";
+		};
+
+		pcie@0xb0080000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg = <0 0xb0080000 0 0x10000>, <0x220 0x04000000 0 0x04000000>;
+			reg-names = "rc_dbi",  "ecam-cfg";
+			bus-range = <64  127>;
+			msi-map = <0x4000 &its_pcie 0x0 0x4000>;
+			msi-map-mask = <0xffff>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x02000000 0 0xb0000000 0x220 0x08000000 0 0x7ff0000>,
+					 <0x01000000 0 0x0 0x220 0x0fff0000 0 0x10000>;
+			num-lanes = <8>;
+			port-id = <1>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <0x0 0 0 1 &mbigen_pcie 10 4
+					 0x0 0 0 2 &mbigen_pcie 11 4
+					 0x0 0 0 3 &mbigen_pcie 12 4
+					 0x0 0 0 4 &mbigen_pcie 13 4>;
+
+			status = "ok";
+		};
+
+		pcie@0xb0090000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg = <0 0xb0090000 0 0x10000>, <0x240 0x08000000 0 0x04000000>;
+			reg-names = "rc_dbi", "ecam-cfg";
+			bus-range = <128 191>;
+			msi-map = <0x8000 &its_pcie 0x0 0x4000>;
+			msi-map-mask = <0xffff>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x02000000 0 0xc0000000 0x240 0x0c000000 0 0x3ff0000>,
+					 <0x01000000 0 0x0 0x240 0x0fff0000 0 0x10000>;
+			num-lanes = <8>;
+			port-id = <2>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <0x0 0 0 1 &mbigen_pcie 19 4
+					 0x0 0 0 2 &mbigen_pcie 20 4
+					 0x0 0 0 3 &mbigen_pcie 21 4
+					 0x0 0 0 4 &mbigen_pcie 22 4>;
+
+			status = "ok";
 		};
 
 		peri_gpio0: gpio@802e0000 {
@@ -402,4 +605,6 @@
 			};
 		};
 	};
+
+	/include/ "hip05_hnsv2.dtsi"
 };

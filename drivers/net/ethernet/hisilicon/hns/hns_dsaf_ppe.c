@@ -61,36 +61,24 @@ void hns_ppe_set_indir_table(struct hns_ppe_cb *ppe_cb,
 	}
 }
 
-static void __iomem *hns_ppe_common_get_ioaddr(
-	struct ppe_common_cb *ppe_common)
+static void __iomem *
+hns_ppe_common_get_ioaddr(struct ppe_common_cb *ppe_common)
 {
-	void __iomem *base_addr;
-
-	int idx = ppe_common->comm_index;
-
-	if (idx == HNS_DSAF_COMM_SERVICE_NW_IDX)
-		base_addr = ppe_common->dsaf_dev->ppe_base
-			+ PPE_COMMON_REG_OFFSET;
-	else
-		base_addr = ppe_common->dsaf_dev->sds_base
-			+ (idx - 1) * HNS_DSAF_DEBUG_NW_REG_OFFSET
-			+ PPE_COMMON_REG_OFFSET;
-
-	return base_addr;
+	return ppe_common->dsaf_dev->ppe_base + PPE_COMMON_REG_OFFSET;
 }
 
 /**
  * hns_ppe_common_get_cfg - get ppe common config
  * @dsaf_dev: dasf device
  * comm_index: common index
- * retuen 0 - success , negative --fail
+ * return 0 - success , negative --fail
  */
 int hns_ppe_common_get_cfg(struct dsaf_device *dsaf_dev, int comm_index)
 {
 	struct ppe_common_cb *ppe_common;
 	int ppe_num;
 
-	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX)
+	if (!HNS_DSAF_IS_DEBUG(dsaf_dev))
 		ppe_num = HNS_PPE_SERVICE_NW_ENGINE_NUM;
 	else
 		ppe_num = HNS_PPE_DEBUG_NW_ENGINE_NUM;
@@ -103,7 +91,7 @@ int hns_ppe_common_get_cfg(struct dsaf_device *dsaf_dev, int comm_index)
 	ppe_common->ppe_num = ppe_num;
 	ppe_common->dsaf_dev = dsaf_dev;
 	ppe_common->comm_index = comm_index;
-	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX)
+	if (!HNS_DSAF_IS_DEBUG(dsaf_dev))
 		ppe_common->ppe_mode = PPE_COMMON_MODE_SERVICE;
 	else
 		ppe_common->ppe_mode = PPE_COMMON_MODE_DEBUG;
@@ -124,32 +112,7 @@ void hns_ppe_common_free_cfg(struct dsaf_device *dsaf_dev, u32 comm_index)
 static void __iomem *hns_ppe_get_iobase(struct ppe_common_cb *ppe_common,
 					int ppe_idx)
 {
-	void __iomem *base_addr;
-	int common_idx = ppe_common->comm_index;
-
-	if (ppe_common->ppe_mode == PPE_COMMON_MODE_SERVICE) {
-		base_addr = ppe_common->dsaf_dev->ppe_base +
-			ppe_idx * PPE_REG_OFFSET;
-
-	} else {
-		base_addr = ppe_common->dsaf_dev->sds_base +
-			(common_idx - 1) * HNS_DSAF_DEBUG_NW_REG_OFFSET;
-	}
-
-	return base_addr;
-}
-
-static int hns_ppe_get_port(struct ppe_common_cb *ppe_common, int idx)
-{
-	int port;
-
-	if (ppe_common->ppe_mode == PPE_COMMON_MODE_SERVICE)
-		port = idx;
-	else
-		port = HNS_PPE_SERVICE_NW_ENGINE_NUM
-			+ ppe_common->comm_index - 1;
-
-	return port;
+	return ppe_common->dsaf_dev->ppe_base + ppe_idx * PPE_REG_OFFSET;
 }
 
 static void hns_ppe_get_cfg(struct ppe_common_cb *ppe_common)
@@ -164,7 +127,6 @@ static void hns_ppe_get_cfg(struct ppe_common_cb *ppe_common)
 		ppe_cb->next = NULL;
 		ppe_cb->ppe_common_cb = ppe_common;
 		ppe_cb->index = i;
-		ppe_cb->port = hns_ppe_get_port(ppe_common, i);
 		ppe_cb->io_base = hns_ppe_get_iobase(ppe_common, i);
 		ppe_cb->virq = 0;
 	}
@@ -318,7 +280,7 @@ static void hns_ppe_exc_irq_en(struct hns_ppe_cb *ppe_cb, int en)
 static void hns_ppe_init_hw(struct hns_ppe_cb *ppe_cb)
 {
 	struct ppe_common_cb *ppe_common_cb = ppe_cb->ppe_common_cb;
-	u32 port = ppe_cb->port;
+	u32 port = ppe_cb->index;
 	struct dsaf_device *dsaf_dev = ppe_common_cb->dsaf_dev;
 	int i;
 
@@ -332,10 +294,12 @@ static void hns_ppe_init_hw(struct hns_ppe_cb *ppe_cb)
 	/* clr and msk except irq*/
 	hns_ppe_exc_irq_en(ppe_cb, 0);
 
-	if (ppe_common_cb->ppe_mode == PPE_COMMON_MODE_DEBUG)
+	if (ppe_common_cb->ppe_mode == PPE_COMMON_MODE_DEBUG) {
 		hns_ppe_set_port_mode(ppe_cb, PPE_MODE_GE);
-	else
+		dsaf_write_dev(ppe_cb, PPE_CFG_PAUSE_IDLE_CNT_REG, 0);
+	} else {
 		hns_ppe_set_port_mode(ppe_cb, PPE_MODE_XGE);
+	}
 
 	hns_ppe_checksum_hw(ppe_cb, 0xffffffff);
 	hns_ppe_cnt_clr_ce(ppe_cb);
