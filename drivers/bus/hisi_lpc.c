@@ -180,11 +180,13 @@ static const struct of_device_id lpc_pltfm_match[] = {
 	},
 	{},
 };
+MODULE_DEVICE_TABLE(of, lpc_pltfm_match);
 
 static const struct acpi_device_id lpc_acpi_match[] = {
         { "HISI0191", },
         {},
 };
+MODULE_DEVICE_TABLE(acpi, lpc_acpi_match);
 
 static struct platform_driver lpc_driver = {
 	.driver = {
@@ -194,11 +196,8 @@ static struct platform_driver lpc_driver = {
 	},
 	.probe                = lpc_probe,
 };
-static int __init lpc_init_driver(void)
-{
-	return platform_driver_register(&lpc_driver);
-}
-arch_initcall(lpc_init_driver);
+
+module_platform_driver(lpc_driver);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Rongrong Zou.");
